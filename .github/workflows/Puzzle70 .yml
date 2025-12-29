@@ -25,9 +25,9 @@ jobs:
           Set-ItemProperty 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name UserAuthentication -Value 0 -Force
           netsh advfirewall firewall add rule name=RDP dir=in action=allow protocol=TCP localport=3389
           $pass = -join ((65..90)+(97..122)+(48..57) | Get-Random -Count 16 | % {[char]$_})
-          net user rdp $pass /add
-          net localgroup administrators rdp /add
-          net localgroup "Remote Desktop Users" rdp /add
+          net user RDP $pass /add
+          net localgroup administrators RDP /add
+          net localgroup "Remote Desktop Users" RDP /add
           echo "PASS=$pass" >> $env:GITHUB_ENV
 
       - name: Launch Kangaroo Puzzle 70 (Expert Mode auto-resume)
