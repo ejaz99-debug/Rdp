@@ -1,0 +1,69 @@
+name: setup R2
+on: workflow_dispatch
+
+jobs:
+  setup:
+    runs-on: windows-latest
+    steps:
+      - name: Create Tools Directory (safe)
+        shell: pwsh
+        run: |
+          if (!(Test-Path "C:\Tools")) { New-Item -ItemType Directory -Path "C:\Tools" }
+          else { Write-Host "C:\Tools already exists, continuing..." }
+
+      - name: Ensure Chocolatey + core packages
+        shell: pwsh
+        run: |
+          Set-ExecutionPolicy Bypass -Scope Process -Force
+          if (!(Get-Command choco.exe -ErrorAction SilentlyContinue)) {
+            Write-Host "Installing Chocolatey..."
+            Set-ExecutionPolicy Bypass -Scope Process -Force;
+            [System.Net.ServicePointManager]::SecurityProtocol = 3072;
+            iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+          } else {
+            Write-Host "Chocolatey already installed"
+          }
+          $ChocolateyProfile = "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"
+          if (Test-Path($ChocolateyProfile)) {
+            Import-Module "$ChocolateyProfile"
+          }
+          refreshenv
+          choco install git python313 --yes
+
+      - name: Install Python libraries (idempotent)
+        shell: pwsh
+        run: |
+          pip install --upgrade pip
+          pip install requests
+          pip install colorama
+
+      - name: Clone Important Repositories (if missing)
+        shell: pwsh
+        run: |
+          if (!(Test-Path "C:\Tools\hashcat")) {
+            git clone https://github.com/hashcat/hashcat C:\Tools\hashcat
+          } else {
+            Write-Host "Hashcat repo already exists"
+          }
+
+      - name: Download Hashcat (release)
+        shell: pwsh
+        run: |
+          $url = "https://hashcat.net/files/hashcat-6.2.6.7z"
+          $out = "C:\Tools\hashcat.7z"
+          Invoke-WebRequest -Uri $url -OutFile $out
+
+      - name: GPU Test
+        shell: pwsh
+        run: |
+          Write-Host "Testing GPU... (this will not fail workflow even if no GPU)"
+          try { Get-WmiObject Win32_VideoController } catch { Write-Host "No GPU detected (expected in GitHub Actions)" }
+
+      - name: Create Easy Commands
+        shell: pwsh
+        run: |
+          Set-Content -Path "C:\Tools\hc.cmd" -Value 'C:\Tools\hashcat\hashcat.exe'
+          Write-Host "Alias created: hc.cmd"
+
+      - name: Done
+        run: echo "Setup finished successfully."
