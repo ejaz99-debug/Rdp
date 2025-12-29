@@ -1,0 +1,62 @@
+name: Puzzle 70 Hunter
+on: workflow_dispatch
+
+jobs:
+  hunt:
+    runs-on: windows-latest
+    timeout-minutes: 240  # 4 hours – best balance for free runs
+
+    steps:
+      - name: Download previous progress
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: p70-checkpoint
+          path: C:\Kangaroo
+
+      - name: Start Tailscale
+        uses: tailscale/github-action@v3
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTH_KEY }}
+
+      - name: Enable RDP + Create User
+        run: |
+          Set-ItemProperty 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name fDenyTSConnections -Value 0 -Force
+          Set-ItemProperty 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name UserAuthentication -Value 0 -Force
+          netsh advfirewall firewall add rule name=RDP dir=in action=allow protocol=TCP localport=3389
+          $pass = -join ((65..90)+(97..122)+(48..57) | Get-Random -Count 16 | % {[char]$_})
+          net user rdp $pass /add
+          net localgroup administrators rdp /add
+          net localgroup "Remote Desktop Users" rdp /add
+          echo "PASS=$pass" >> $env:GITHUB_ENV
+
+      - name: Launch Kangaroo Puzzle 70 (Expert Mode auto-resume)
+        run: |
+          iwr "https://github.com/JeanLucPons/Kangaroo/releases/download/v2.2/Kangaroo_v2.2_win64.zip" -OutFile k.zip
+          Expand-Archive k.zip -DestinationPath C:\Kangaroo
+          cd C:\Kangaroo
+          .\Kangaroo.exe -gpu -gpuforce -d 20 -m 25000000 -w p70.save -wi 60 -ws -r 40000000000000000:7fffffffffffffffff -p 0347b36f41c2823a8ac26e866d65f42ea2a48f9f6e0133c4d0313ac5b8b0e2e05e
+
+      - name: Save progress for next run
+        uses: actions/upload-artifact@v4
+        with:
+          name: p70-checkpoint
+          path: C:\Kangaroo\p70.save*
+
+      - name: Show connection info + keep alive
+        run: |
+          $ip = tailscale ip -4
+          Write-Host "=========================================="
+          Write-Host "RDP READY – Connect now!"
+          Write-Host "Tailscale IP : $ip"
+          Write-Host "Username     : rdp"
+          Write-Host "Password     : $env:PASS"
+          Write-Host "Puzzle 70 running – progress saved forever"
+          Write-Host "=========================================="
+
+          # Anti-idle – random mouse move every 5 minutes
+          Add-Type -AssemblyName System.Windows.Forms
+          while ($true) {
+            [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point((Get-Random -Maximum 1920),(Get-Random -Maximum 1080))
+            Start-Sleep -Seconds 300
+          }
